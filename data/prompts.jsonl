@@ -1,0 +1,6 @@
+{"id": "short-1", "class": "short", "text": "ما هو الذكاء الاصطناعي؟", "expected_tokens": 20}
+{"id": "short-2", "class": "short", "text": "اشرح ما هو التعلم الآلي في جملتين.", "expected_tokens": 25}
+{"id": "medium-1", "class": "medium", "text": "اشرح الفرق بين نماذج التعلم الآلي المُشرَف وغير المُشرَف، مع مثال لكل منهما.", "expected_tokens": 80}
+{"id": "medium-2", "class": "medium", "text": "ما هي أبرز تحديات معالجة اللغة العربية في نماذج الذكاء الاصطناعي الحديثة؟", "expected_tokens": 90}
+{"id": "long-1", "class": "long", "text": "اكتب شرحاً تفصيلياً لبنية المحوّل (Transformer) مع توضيح دور كل من: طبقة الانتباه الذاتي (Self-Attention)، والـ Feed-Forward Network، والـ Positional Encoding. وضّح كيف تُعالَج المتوالية وما هو الدور الأساسي لـ Query وKey وValue في حساب الانتباه.", "expected_tokens": 200}
+{"id": "long-2", "class": "long", "text": "قارن بين ثلاثة مناهج مختلفة لتحسين أداء نموذج لغوي كبير في تصنيف النصوص العربية: (1) الـ Prompt Engineering، (2) الـ Fine-Tuning بـ LoRA، (3) RAG مع قاعدة بيانات متجهات. ناقش إيجابيات وسلبيات كل نهج من حيث الدقة والتكلفة والوقت اللازم للتطوير.", "expected_tokens": 250}
