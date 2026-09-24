@@ -76,9 +76,10 @@ def test_build_results_payload_contains_provenance_fields():
         CostProfile(
             model="qwen3:4b",
             tokens_per_sec=4.0,
-            api_cost_per_1k=0.42,
-            local_cost_per_1k=0.005,
-            breakeven_tokens_month=119048,
+            api_cost_per_1m=0.42,
+            local_cost_per_1m=0.005,
+            breakeven_tokens_month=119047619,
+            capacity_tokens_month=10_368_000,
         )
     ]
     payload = build_results_payload(

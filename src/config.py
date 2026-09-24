@@ -14,7 +14,7 @@ load_dotenv()
 class Settings:
     ollama_host: str = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
     # Models to benchmark — comma-separated
-    models_raw: str = os.getenv("BENCH_MODELS", "qwen3:4b,qwen2.5:7b-instruct")
+    models_raw: str = os.getenv("BENCH_MODELS", "gemma3:4b,qwen2.5-coder:3b")
     # Runs per (model, prompt) pair — higher = more stable averages
     runs_per_cell: int = int(os.getenv("RUNS_PER_CELL", "2"))
     # Free-text description of the machine the benchmark runs on — recorded in

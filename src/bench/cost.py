@@ -21,40 +21,41 @@ from src.schema import CostProfile
 LOCAL_SERVER_COST_PER_MONTH_USD = 50.0
 
 
+HOURS_PER_MONTH = 24 * 30
+
+
 def build_cost_profile(
     model: str,
     avg_tokens_per_sec: float,
-    api_input_per_1k: float = 0.15,   # USD, GPT-4o-mini ballpark
-    api_output_per_1k: float = 0.60,
+    api_input_per_1m: float = 0.15,   # USD per 1M tokens, the unit API vendors publish
+    api_output_per_1m: float = 0.60,
 ) -> CostProfile:
     """
-    Compute break-even volume for local vs API.
+    Compare a fixed-cost local server with per-token API pricing.
 
-    break-even: LOCAL_cost/month = API_cost/month
-    LOCAL_cost = $50 (fixed, regardless of volume)
-    API_cost   = tokens_month / 1000 × api_combined_per_1k
-    => tokens_month = 50 / (api_combined_per_1k / 1000)
+    break-even: tokens_month at which API spend equals the local monthly cost
+        tokens_month = LOCAL_cost / (api_blended_per_1m / 1e6)
+    capacity: what the measured throughput can produce if the server runs all month.
+    The break-even only matters if capacity reaches it.
     """
-    # Blended API cost assuming ~40% input, ~60% output token ratio
-    api_blended = 0.4 * api_input_per_1k + 0.6 * api_output_per_1k
+    # Blended API price assuming ~40% input, ~60% output tokens.
+    api_blended_per_1m = 0.4 * api_input_per_1m + 0.6 * api_output_per_1m
 
-    if avg_tokens_per_sec > 0:
-        # Monthly capacity: tokens/sec × 3600 × 24 × 30 (if server runs 24/7)
-        tokens_per_month_capacity = avg_tokens_per_sec * 3600 * 24 * 30
-        local_cost_per_1k = (LOCAL_SERVER_COST_PER_MONTH_USD / tokens_per_month_capacity) * 1000
-    else:
-        local_cost_per_1k = float("inf")
-        tokens_per_month_capacity = 0
-
-    if api_blended > 0:
-        breakeven = (LOCAL_SERVER_COST_PER_MONTH_USD / api_blended) * 1000
-    else:
-        breakeven = float("inf")
+    capacity = avg_tokens_per_sec * 3600 * HOURS_PER_MONTH if avg_tokens_per_sec > 0 else 0
+    local_cost_per_1m = (
+        LOCAL_SERVER_COST_PER_MONTH_USD / capacity * 1_000_000 if capacity > 0 else float("inf")
+    )
+    breakeven = (
+        LOCAL_SERVER_COST_PER_MONTH_USD / api_blended_per_1m * 1_000_000
+        if api_blended_per_1m > 0
+        else float("inf")
+    )
 
     return CostProfile(
         model=model,
         tokens_per_sec=round(avg_tokens_per_sec, 2),
-        api_cost_per_1k=round(api_blended, 4),
-        local_cost_per_1k=round(local_cost_per_1k, 6),
-        breakeven_tokens_month=round(breakeven),
+        api_cost_per_1m=round(api_blended_per_1m, 6),
+        local_cost_per_1m=local_cost_per_1m if capacity == 0 else round(local_cost_per_1m, 4),
+        breakeven_tokens_month=round(breakeven) if breakeven != float("inf") else breakeven,
+        capacity_tokens_month=round(capacity),
     )

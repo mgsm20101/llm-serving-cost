@@ -65,18 +65,21 @@ def write_report(runs: list[BenchmarkRun], cost_profiles: list[CostProfile]) -> 
 
     lines += [
         "",
-        "## Cost Model (Local CPU server vs Cloud API)",
+        "## Cost model (local server vs hosted API)",
         "",
-        "> Local: ~$50/month all-in (hardware amortised + power) for a dedicated CPU server.",
-        "> API: blended GPT-4o-mini pricing (40% input @ $0.15 + 60% output @ $0.60 per 1k tokens).",
+        "> Local: an assumed ~$50/month dedicated server (an input, not a measurement).",
+        "> API: illustrative hosted pricing, $0.15 input / $0.60 output per 1M tokens, blended 40/60.",
+        "> Capacity: measured tok/s running 24/7 for 30 days on the benchmark machine.",
         "",
-        "| Model | Avg tok/s | Local $/1k tok | API $/1k tok | Break-even (tok/month) |",
-        "|-------|:---:|:---:|:---:|:---:|",
+        "| Model | Avg tok/s | Capacity (tok/month) | Local $/1M tok | API $/1M tok "
+        "| Break-even (tok/month) | Reachable |",
+        "|-------|:---:|:---:|:---:|:---:|:---:|:---:|",
     ]
     for cp in cost_profiles:
         lines.append(
-            f"| `{cp.model}` | {cp.tokens_per_sec} | ${cp.local_cost_per_1k:.5f}"
-            f" | ${cp.api_cost_per_1k:.4f} | {cp.breakeven_tokens_month:,} |"
+            f"| `{cp.model}` | {cp.tokens_per_sec} | {cp.capacity_tokens_month:,} "
+            f"| ${cp.local_cost_per_1m:.2f} | ${cp.api_cost_per_1m:.2f} "
+            f"| {cp.breakeven_tokens_month:,} | {'yes' if cp.breakeven_reachable else 'no'} |"
         )
 
     lines += [

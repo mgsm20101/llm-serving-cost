@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class BenchmarkRun:
-    model: str                    # e.g. "qwen3:4b"
+    model: str                    # e.g. "gemma3:4b"
     prompt_id: str                # from prompts.jsonl
     prompt_class: str             # "short" | "medium" | "long"
     prompt_tokens: int            # approximate input token count
@@ -39,9 +39,15 @@ class CostProfile:
     """Cost model: local hardware amortised vs API pricing."""
     model: str
     tokens_per_sec: float
-    # API pricing (USD per 1k tokens, input+output combined estimate)
-    api_cost_per_1k: float
-    # Local: GPU/CPU amortised per hour, tokens/hour from bench
-    local_cost_per_1k: float
-    # Break-even: how many tokens/month to justify local over API
+    # Blended API price, USD per 1M tokens (40% input / 60% output)
+    api_cost_per_1m: float
+    # Local fixed monthly cost spread over the measured monthly capacity, USD per 1M tokens
+    local_cost_per_1m: float
+    # Tokens/month at which API spend equals the local monthly cost
     breakeven_tokens_month: float
+    # Tokens/month the measured throughput produces running 24/7
+    capacity_tokens_month: float = 0
+
+    @property
+    def breakeven_reachable(self) -> bool:
+        return 0 < self.breakeven_tokens_month <= self.capacity_tokens_month

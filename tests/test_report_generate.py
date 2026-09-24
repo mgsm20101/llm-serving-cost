@@ -74,9 +74,10 @@ def test_write_report_produces_expected_sections(tmp_path, monkeypatch):
         CostProfile(
             model="qwen3:4b",
             tokens_per_sec=5.0,
-            api_cost_per_1k=0.42,
-            local_cost_per_1k=0.005,
-            breakeven_tokens_month=119048,
+            api_cost_per_1m=0.42,
+            local_cost_per_1m=0.005,
+            breakeven_tokens_month=119047619,
+            capacity_tokens_month=10_368_000,
         )
     ]
 
@@ -86,5 +87,6 @@ def test_write_report_produces_expected_sections(tmp_path, monkeypatch):
     assert "# LLM Serving Cost — Benchmark Results" in text
     assert "Total runs: 1 · Models: qwen3:4b" in text
     assert "| `qwen3:4b` | short |" in text
-    assert "119,048" in text
+    assert "119,047,619" in text
+    assert "| no |" in text
     assert "## Per-run Raw Data" in text

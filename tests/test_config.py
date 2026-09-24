@@ -22,7 +22,7 @@ def test_models_splits_and_strips_comma_separated_list(monkeypatch):
 
 def test_models_defaults_when_env_unset(monkeypatch):
     mod = _reload_settings_with_env(monkeypatch)
-    assert mod.settings.models == ["qwen3:4b", "qwen2.5:7b-instruct"]
+    assert mod.settings.models == ["gemma3:4b", "qwen2.5-coder:3b"]
 
 
 def test_runs_per_cell_reads_int_from_env(monkeypatch):

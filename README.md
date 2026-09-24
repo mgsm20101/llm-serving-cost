@@ -22,7 +22,7 @@ run_bench.py
     └─ src/report/generate.py    # write docs/results.md
          │
          └─▶ Ollama /api/generate (streaming)
-                 └─▶ qwen3:4b
+                 └─▶ gemma3:4b · qwen2.5-coder:3b
 
 src/schema.py      BenchmarkRun · BenchmarkSummary · CostProfile
 src/config.py      settings from .env
@@ -41,7 +41,8 @@ python -m venv .venv
 python -m pip install -r requirements.txt
 cp .env.example .env          # edit BENCH_MODELS if needed
 
-ollama pull qwen3:4b
+ollama pull gemma3:4b
+ollama pull qwen2.5-coder:3b
 
 python run_bench.py           # benchmark → docs/results.md + results/bench_<sha8>.json
 ```
@@ -49,7 +50,7 @@ python run_bench.py           # benchmark → docs/results.md + results/bench_<s
 Flags:
 
 ```bash
-python run_bench.py --model qwen3:4b     # override BENCH_MODELS, repeatable
+python run_bench.py --model gemma3:4b    # override BENCH_MODELS, repeatable
 python run_bench.py --allow-dirty        # run despite uncommitted changes / no git repo
 ```
 
@@ -79,17 +80,12 @@ latency is visible. See `docs/DESIGN.md` for the full rationale.
 
 <!-- RESULTS: filled from results/bench_<sha8>.json after the measured run -->
 
-The measured run will report, per prompt class (short / medium / long) for
-`qwen3:4b`: average TTFT, average tokens/sec, P95 total latency, and average
-output tokens, plus a break-even token volume against blended API pricing
-(see `src/bench/cost.py`). Full methodology and current numbers:
-[`docs/results.md`](docs/results.md) and [`docs/cto-memo.md`](docs/cto-memo.md).
 
 ## Limitations
 
-- **One machine, one model measured.** Everything in `docs/results.md` comes
+- **One machine, two small models.** Everything in `docs/results.md` comes
   from a single laptop (i7-8750H, 15.9 GB RAM, NVIDIA GTX 1050 Ti 4 GB,
-  Windows 11) running `qwen3:4b` through Ollama. Ollama does offload part of
+  Windows 11) running `gemma3:4b` and `qwen2.5-coder:3b` through Ollama. Ollama does offload part of
   the model into the GPU, but how much VRAM was used for a given run was not
   logged, so CPU and GPU contributions cannot be separated from these
   numbers.
@@ -106,13 +102,12 @@ output tokens, plus a break-even token volume against blended API pricing
 
 - That a GPU-equipped server would (or would not) change the recommendation
   in `docs/cto-memo.md` — no GPU server was benchmarked, only this laptop.
-- That `qwen3:4b` is representative of other model sizes or architectures —
-  only one model was measured.
+- That two 3–4B models are representative of other sizes or architectures.
 - That the break-even token volume holds for a different API price, a
   different local-hardware cost, or a different workload mix — the formula
   in `src/bench/cost.py` is linear in both, so it is easy to recompute, but
   the shipped number is only valid for the stated inputs.
-- Output quality, correctness, or suitability of `qwen3:4b` for any given
+- Output quality, correctness, or suitability of either model for any given
   task — this project only measures serving latency/throughput/cost.
 
 ## Reproduction
@@ -123,7 +118,8 @@ cd llm-serving-cost
 python -m venv .venv && source .venv/bin/activate   # or .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 cp .env.example .env
-ollama pull qwen3:4b
+ollama pull gemma3:4b
+ollama pull qwen2.5-coder:3b
 python run_bench.py
 ```
 

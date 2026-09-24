@@ -28,12 +28,18 @@ with cold-start jitter has P95 much higher than avg.
 ## Cost model design
 
 The cost model has three inputs:
-1. `avg_tokens_per_sec` — from our benchmark
-2. `LOCAL_SERVER_COST_PER_MONTH_USD` — hardware cost amortised
-3. `api_cost_per_1k` — current API pricing
+1. `avg_tokens_per_sec` — from the benchmark
+2. `LOCAL_SERVER_COST_PER_MONTH_USD` — an assumed fixed monthly cost
+3. API input/output prices **per 1M tokens** — the unit vendors publish
 
-From these, we derive the break-even point: the monthly token volume above which
-local serving is cheaper than API. The model is deliberately simple — its value is
+From these it derives two numbers: the break-even volume (tokens/month above which a
+fixed-cost server beats per-token pricing) and the capacity (tokens/month the measured
+throughput can actually produce running 24/7). The break-even is only meaningful if the
+capacity reaches it; the report says so per model.
+
+An earlier version took the per-1M price as a per-1k price, which put the break-even
+1000× too low (about 119 thousand tokens/month instead of about 119 million). The unit
+is now in every parameter name and pinned by a test. The model is deliberately simple — its value is
 the *methodology*, not the exact number. Real deployments need to add:
 - GPU purchase/cloud lease costs (no GPU server was benchmarked here)
 - Staff time for ops and maintenance
