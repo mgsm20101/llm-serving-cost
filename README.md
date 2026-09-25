@@ -78,7 +78,39 @@ latency is visible. See `docs/DESIGN.md` for the full rationale.
 
 ## Results
 
-<!-- RESULTS: filled from results/bench_<sha8>.json after the measured run -->
+Measured at commit `f6042d92` on a clean tree — raw file
+[`results/bench_f6042d92.json`](results/bench_f6042d92.json) (every request, the aggregates, and the cost inputs).
+24 streamed requests: 2 models × 6 Arabic prompts × 2 repetitions,
+no warm-up (the first request of each model includes loading it, which is why medians are
+reported). Hardware: Windows 11, 15.9 GB RAM, NVIDIA GTX 1050 Ti 4 GB (Ollama GPU offload).
+
+| model | prompt class | runs | median TTFT ms | median tok/s | p95 total ms |
+|---|---|---:|---:|---:|---:|
+| `gemma3:4b` | short | 4/4 | 1,191 | 9.52 | 24,879 |
+| `gemma3:4b` | medium | 4/4 | 845 | 10.14 | 30,112 |
+| `gemma3:4b` | long | 4/4 | 982 | 9.73 | 30,883 |
+| `qwen2.5-coder:3b` | short | 4/4 | 372 | 8.91 | 21,693 |
+| `qwen2.5-coder:3b` | medium | 4/4 | 395 | 8.64 | 34,901 |
+| `qwen2.5-coder:3b` | long | 4/4 | 578 | 8.32 | 36,180 |
+
+**Latency.** Once a model is loaded, the first token arrives in under 1.2 s for every prompt
+class, and decoding runs at about 8–10 tokens/s. The p95 totals (22–36 s) are dominated by
+generating up to 300 tokens at that rate, not by waiting for the first one.
+
+**Cost.** A fixed ~$50/month server is compared with illustrative hosted pricing of $0.15 /
+$0.60 per 1M input / output tokens. Both prices are inputs, not measurements; the throughput is
+measured.
+
+| model | mean tok/s | capacity, tok/month (24/7) | local $/1M tok | API $/1M tok | break-even tok/month | reachable |
+|---|---:|---:|---:|---:|---:|:---:|
+| `gemma3:4b` | 9.77 | 25,321,680 | $1.97 | $0.42 | 119,047,619 | no |
+| `qwen2.5-coder:3b` | 8.37 | 21,686,400 | $2.31 | $0.42 | 119,047,619 | no |
+
+The break-even (~119M tokens/month) is **beyond what this hardware can produce** even running
+24/7 (~22–25M). At the measured throughput a local token costs about 4.7× the hosted price
+under these assumptions. Local serving on this class of machine is justified by data residency
+or offline operation, not by cost — and a cost case would need a benchmark on the actual target
+server, where throughput, and so capacity, would be different.
 
 
 ## Limitations
