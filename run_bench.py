@@ -22,7 +22,6 @@ from __future__ import annotations
 import argparse
 import io
 import sys
-from datetime import datetime, timezone
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
@@ -104,7 +103,6 @@ def main(argv: list[str] | None = None) -> None:
         repetitions=settings.runs_per_cell,
         source_commit_sha=source_commit_sha,
         worktree_clean=worktree_clean,
-        now=lambda: datetime.now(timezone.utc).isoformat(),
     )
     print_summary(payload["aggregates"])
     console.print(f"[bold]Wrote[/bold] {write_results_json(payload, sha8(source_commit_sha))}")

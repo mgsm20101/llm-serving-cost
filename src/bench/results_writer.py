@@ -5,8 +5,7 @@ It carries every per-request measurement plus enough context (model, host,
 hardware, git commit, warm-up protocol) that the numbers in `docs/results.md`
 can be traced back to exactly how they were produced.
 
-Building the payload is pure — no file I/O, no clock reads beyond the
-`now` callable passed in — so it is fully unit-testable.
+Building the payload does no file I/O; only write_results_json touches disk.
 """
 
 from __future__ import annotations
@@ -14,8 +13,8 @@ from __future__ import annotations
 import json
 import statistics
 from dataclasses import asdict
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
 
 from src.schema import BenchmarkRun, CostProfile
 
@@ -73,11 +72,10 @@ def build_results_payload(
     repetitions: int,
     source_commit_sha: str | None,
     worktree_clean: bool,
-    now: Callable[[], str],
 ) -> dict:
     """Build the full JSON-serializable provenance payload."""
     return {
-        "timestamp": now(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "source_commit_sha": source_commit_sha,
         "worktree_clean": worktree_clean,
         "models": models,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
 from src.bench.results_writer import (
     build_aggregates,
@@ -105,7 +106,6 @@ def test_build_results_payload_contains_provenance_fields():
         repetitions=2,
         source_commit_sha="deadbeef01",
         worktree_clean=True,
-        now=lambda: "2026-01-01T00:00:00+00:00",
     )
 
     assert payload["source_commit_sha"] == "deadbeef01"
@@ -117,7 +117,7 @@ def test_build_results_payload_contains_provenance_fields():
     assert len(payload["runs"]) == 1
     assert len(payload["aggregates"]) == 1
     assert len(payload["cost_profiles"]) == 1
-    assert payload["timestamp"] == "2026-01-01T00:00:00+00:00"
+    assert datetime.fromisoformat(payload["timestamp"]).tzinfo is not None
 
 
 def test_write_results_json_writes_readable_utf8_json(tmp_path):
