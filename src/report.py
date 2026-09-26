@@ -13,7 +13,7 @@ from pathlib import Path
 
 from src.schema import BenchmarkRun, BenchmarkSummary, CostProfile
 
-RESULTS_MD = Path(__file__).resolve().parents[2] / "docs" / "results.md"
+RESULTS_MD = Path(__file__).resolve().parents[1] / "docs" / "results.md"
 
 
 def _summarize(runs: list[BenchmarkRun], model: str, prompt_class: str) -> BenchmarkSummary:

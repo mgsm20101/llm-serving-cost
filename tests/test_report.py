@@ -1,8 +1,8 @@
-"""Tests for report aggregation and markdown generation in src/report/generate.py."""
+"""Tests for report aggregation and markdown generation in src/report.py."""
 
 from __future__ import annotations
 
-from src.report.generate import _summarize, write_report
+from src.report import _summarize, write_report
 from src.schema import BenchmarkRun, CostProfile
 
 
@@ -64,10 +64,10 @@ def test_summarize_ignores_other_models_and_classes():
 
 
 def test_write_report_produces_expected_sections(tmp_path, monkeypatch):
-    import src.report.generate as generate_module
+    import src.report as report_module
 
     fake_path = tmp_path / "results.md"
-    monkeypatch.setattr(generate_module, "RESULTS_MD", fake_path)
+    monkeypatch.setattr(report_module, "RESULTS_MD", fake_path)
 
     runs = [_run(model="qwen3:4b", prompt_class="short", ttft_ms=100.0, total_ms=200.0, tps=5.0)]
     cost_profiles = [

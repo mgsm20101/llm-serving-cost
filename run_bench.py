@@ -34,7 +34,7 @@ from src.bench.cost import build_cost_profile
 from src.bench.provenance import DirtyWorktreeError, check_provenance
 from src.bench.results_writer import build_results_payload, sha8, write_results_json
 from src.config import settings
-from src.report.generate import _summarize, write_report
+from src.report import _summarize, write_report
 
 console = Console(file=sys.stdout)
 
