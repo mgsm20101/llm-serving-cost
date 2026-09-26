@@ -34,7 +34,7 @@ from src.bench.cost import build_cost_profile
 from src.bench.provenance import DirtyWorktreeError, check_provenance
 from src.bench.results_writer import build_results_payload, sha8, write_results_json
 from src.config import settings
-from src.report import _summarize, write_report
+from src.report import LATENCY_COLUMNS, latency_row, sorted_aggregates, write_report
 
 console = Console(file=sys.stdout)
 
@@ -87,19 +87,6 @@ def main(argv: list[str] | None = None) -> None:
                         f"tok/s={result.tokens_per_sec:.1f} out={result.output_tokens}"
                     )
 
-    # Summary table
-    table = Table(title="Results Summary", header_style="bold")
-    for col in ["Model", "Class", "Avg TTFT ms", "Avg tok/s", "P95 total ms"]:
-        table.add_column(col, justify="right" if col != "Model" and col != "Class" else "left")
-
-    for model in models:
-        for pc in ["short", "medium", "long"]:
-            s = _summarize(runs, model, pc)
-            if s.n == 0:
-                continue
-            table.add_row(model, pc, str(s.avg_ttft_ms), str(s.avg_tokens_per_sec), str(s.p95_total_ms))
-    console.print(table)
-
     # Cost profiles
     cost_profiles = []
     for model in models:
@@ -107,8 +94,6 @@ def main(argv: list[str] | None = None) -> None:
         if ok_runs:
             avg_tps = sum(r.tokens_per_sec for r in ok_runs) / len(ok_runs)
             cost_profiles.append(build_cost_profile(model, avg_tps))
-
-    write_report(runs, cost_profiles)
 
     payload = build_results_payload(
         runs=runs,
@@ -121,8 +106,19 @@ def main(argv: list[str] | None = None) -> None:
         worktree_clean=worktree_clean,
         now=lambda: datetime.now(timezone.utc).isoformat(),
     )
-    out_path = write_results_json(payload, sha8(source_commit_sha))
-    console.print(f"[bold]Wrote[/bold] {out_path}")
+    print_summary(payload["aggregates"])
+    console.print(f"[bold]Wrote[/bold] {write_results_json(payload, sha8(source_commit_sha))}")
+    console.print(f"[bold]Wrote[/bold] {write_report(payload)}")
+
+
+def print_summary(aggregates: list[dict]) -> None:
+    """Print the same median/p95 table that docs/results.md shows."""
+    table = Table(title="Results Summary", header_style="bold")
+    for i, col in enumerate(LATENCY_COLUMNS):
+        table.add_column(col, justify="left" if i < 2 else "right")
+    for agg in sorted_aggregates(aggregates):
+        table.add_row(*latency_row(agg))
+    console.print(table)
 
 
 if __name__ == "__main__":

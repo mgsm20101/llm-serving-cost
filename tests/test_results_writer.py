@@ -60,6 +60,20 @@ def test_build_aggregates_excludes_errors_from_median_but_counts_error_rate():
     assert row["error_rate"] == round(1 / 3, 3)
 
 
+def test_build_aggregates_p95_picks_the_95th_percentile_index():
+    # 20 runs with total_ms = 1..20; p95 index = int(20*0.95)-1 = 18 -> value 19
+    runs = [_run(total_ms=float(i)) for i in range(1, 21)]
+    assert build_aggregates(runs)[0]["p95_total_ms"] == 19.0
+
+
+def test_build_aggregates_all_failed_cell_has_no_medians():
+    row = build_aggregates([_run(error="boom"), _run(error="boom again")])[0]
+    assert row["n_ok"] == 0
+    assert row["error_rate"] == 1.0
+    assert row["median_ttft_ms"] is None
+    assert row["p95_total_ms"] is None
+
+
 def test_build_aggregates_separates_different_models_and_classes():
     runs = [
         _run(model="qwen3:4b", prompt_class="short"),

@@ -1,12 +1,13 @@
 """Contracts for benchmark results.
 
-A single BenchmarkRun captures every measurable metric for one (model, prompt) pair.
-BenchmarkSummary aggregates across a prompt_class (short/medium/long).
+BenchmarkRun is one streamed request; CostProfile is the local-vs-API cost model
+for one model. Per-cell aggregates (medians, p95) are plain dicts built in
+src/bench/results_writer.py.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass
@@ -20,18 +21,6 @@ class BenchmarkRun:
     total_ms: float               # total generation time (ms)
     tokens_per_sec: float         # output_tokens / (total_ms / 1000)
     error: str | None = None      # None if successful
-
-
-@dataclass
-class BenchmarkSummary:
-    model: str
-    prompt_class: str
-    n: int                        # number of runs
-    avg_ttft_ms: float
-    avg_tokens_per_sec: float
-    avg_output_tokens: float
-    p95_total_ms: float           # 95th percentile total latency
-    error_rate: float             # fraction of failed runs
 
 
 @dataclass
