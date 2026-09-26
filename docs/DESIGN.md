@@ -1,71 +1,58 @@
 # Design — LLM Serving Cost Profiler
 
-## Why this project
+The README says what is measured, how to run it and what came out. This file
+records why the measurement and the cost model are built the way they are.
 
-Every LLM deployment question eventually becomes a cost question: on-prem vs API,
-quantized vs full-precision, batch vs streaming. This project builds the measurement
-layer to answer those questions from data, not assumptions.
+## How each metric is computed
 
-## What we measure and why
+`src/bench/benchmark.py:run_single` streams Ollama's `/api/generate` line by line.
+Each line is a JSON object with a `response` field (a piece of output) and a final
+`done: true` chunk that carries `eval_count`, Ollama's own count of output tokens.
 
-**TTFT (Time To First Token)** — the latency the user *feels*. A slow TTFT means
-the user waits for nothing while the model is still prefilling. Critical for
-interactive applications; less relevant for batch jobs.
+- **TTFT** — request start to the first non-empty `response`.
+- **Total** — request start to `done: true`.
+- **tokens/sec** — `eval_count / (total_ms / 1000)`. The denominator is the whole
+  request, so it **includes the time to first token** (prompt processing, and model
+  loading on a cold first request). It is not decode-only throughput; it is the rate a
+  caller sees end to end. That is why the first request of each model shows a lower
+  tok/s (7.23 and 5.30 in `docs/results.md`) than the ones after it.
 
-**tokens/sec** — the sustained generation rate after the first token. Determines
-throughput: how many requests can be served concurrently, and how much the model
-costs at volume.
+**Why streaming?** Without streaming only the total latency is visible. Streaming is
+what makes the first-token moment observable without instrumenting the model.
 
-**Why streaming?** Ollama's streaming API emits each token as it is generated.
-Without streaming we only see total latency — TTFT is invisible. Streaming is the
-only way to separate prefill (TTFT) from decode (tok/s) without instrumenting the
-model internals.
+## Why medians and p95, and no warm-up
 
-**P95 total latency** — the tail. Averages are optimistic; P95 shows what the
-occasional slow request looks like. A stable model has P95/avg close to 1; a model
-with cold-start jitter has P95 much higher than avg.
+No warm-up requests are sent; every request is recorded (see `warmup_protocol` in the
+results JSON). The first request per model includes loading it, so a mean would be
+dominated by that one cold start (19.6 s TTFT for `gemma3:4b short-1`). Per-cell
+aggregates are therefore the median for TTFT and tok/s and the p95 for total latency.
+They are computed once, in `src/bench/results_writer.py:build_aggregates`, and the
+console table and `docs/results.md` both render those stored aggregates.
 
 ## Cost model design
 
-The cost model has three inputs:
-1. `avg_tokens_per_sec` — from the benchmark
+The cost model (`src/bench/cost.py:build_cost_profile`) has three inputs:
+1. the model's **mean** tok/s over all successful runs — measured
 2. `LOCAL_SERVER_COST_PER_MONTH_USD` — an assumed fixed monthly cost
 3. API input/output prices **per 1M tokens** — the unit vendors publish
 
-From these it derives two numbers: the break-even volume (tokens/month above which a
-fixed-cost server beats per-token pricing) and the capacity (tokens/month the measured
-throughput can actually produce running 24/7). The break-even is only meaningful if the
-capacity reaches it; the report says so per model.
+From these it derives the break-even volume (tokens/month above which a fixed-cost
+server beats per-token pricing) and the capacity (tokens/month the measured
+throughput produces running 24/7). The break-even only matters if capacity reaches it;
+the report says so per model. Because tok/s includes time to first token, capacity is
+the rate for back-to-back single requests, not a decode-only upper bound.
 
 An earlier version took the per-1M price as a per-1k price, which put the break-even
 1000× too low (about 119 thousand tokens/month instead of about 119 million). The unit
-is now in every parameter name and pinned by a test. The model is deliberately simple — its value is
-the *methodology*, not the exact number. Real deployments need to add:
-- GPU purchase/cloud lease costs (no GPU server was benchmarked here)
-- Staff time for ops and maintenance
-- Reliability/availability differences
+is now in every parameter name and pinned by a test. The model is deliberately simple;
+a real deployment would add GPU purchase or lease cost, staff time for operations, and
+reliability differences.
 
-## Why no GPU server in this project
+## Hardware: a laptop, not a GPU server
 
-No GPU *server* was available to benchmark, so the measurement is a laptop running
-Ollama. It is worth being exact about what that means, because an earlier version of
-this file said "the benchmark machine is CPU-only" and that was false: the box has a
-GTX 1050 Ti (4 GB) and Ollama offloads into it. What is true is that the run did not
-record how much of the model was resident in VRAM, so no split between CPU and GPU work
-can be claimed from it.
-
-That makes these numbers a floor rather than a clean CPU baseline — good enough to make
-the cost model conservative (the API looks more competitive than it would against a
-real GPU server), and not good enough to publish as a CPU-vs-GPU comparison. The
-methodology is unchanged; swap the hardware, log the GPU share, and re-run
-`python run_bench.py`.
-
-## Streaming implementation details
-
-We use `httpx` streaming to read Ollama's `/api/generate` line by line. Each line
-is a JSON object with a `response` field (one token) and a final `done:true` chunk
-that includes `eval_count` (total output tokens, authoritative from Ollama).
-
-TTFT is the time from request start to the first non-empty `response` field.
-Total latency is from request start to `done:true`. tokens/sec is
-`eval_count / (total_ms / 1000)`.
+No GPU server was available, so the measurement is a laptop running Ollama. An
+earlier version of this file called the machine CPU-only; that was false — it has a
+GTX 1050 Ti (4 GB) and Ollama offloads into it. The run did not record how much of the
+model was resident in VRAM, so no CPU/GPU split can be claimed. The numbers are a floor
+for the cost model (the API looks more competitive than it would against a real GPU
+server), not a CPU-vs-GPU comparison.

@@ -1,8 +1,10 @@
 """Core benchmarking logic.
 
-Measures TTFT (Time To First Token), tokens/sec, and total latency for each
-(model, prompt) pair using the Ollama streaming API. Runs N times per cell
-and collects all raw results.
+run_single streams one request to Ollama's /api/generate and returns a
+BenchmarkRun with TTFT, total latency and tokens/sec. tokens/sec is
+output tokens / total request time, so it includes the time to first token
+(prompt processing, and model loading on a cold first request); it is not
+decode-only throughput. The repetition loop lives in run_bench.py.
 
 Why streaming? Streaming is the only way to measure TTFT accurately — it gives
 us the exact moment the first token arrives from the model.

@@ -1,20 +1,19 @@
-"""Main benchmark runner.
+"""Entry point: benchmark the models, then write the results.
 
-Run:  python run_bench.py [--model MODEL] [--allow-dirty]
-Produces: docs/results.md, results/bench_<sha8>.json, and a printed table.
+Run:     python run_bench.py [--model MODEL] [--allow-dirty]
+Reads:   .env (via src/config.py), data/prompts.jsonl, Ollama at OLLAMA_HOST
+Writes:  results/bench_<sha8>.json, docs/results.md, and a console table
 
-What it measures per (model, prompt) pair:
-- TTFT  (Time To First Token): perceived latency for the user
-- tokens/sec: sustained throughput during generation
-- P95 total latency: worst-case tail
+Flow of main():
+  check_provenance -> load_prompts -> run_single (model x prompt x RUNS_PER_CELL)
+  -> build_cost_profile (mean tok/s per model) -> build_results_payload
+  -> print_summary -> write_results_json -> write_report
 
-Why streaming?
-Ollama's streaming API sends each token as it is generated. This is the only
-way to measure TTFT accurately — without streaming we only see total latency.
+Per request it records TTFT (time to first streamed token), total time, and
+tok/s = output tokens / total request time (time to first token included).
 
 Provenance: refuses to run on an uncommitted tree, or outside a git
-repository, unless --allow-dirty is passed. Every run writes its raw
-per-request data to results/bench_<sha8>.json, keyed by the commit it ran on.
+repository, unless --allow-dirty is passed.
 """
 
 from __future__ import annotations
