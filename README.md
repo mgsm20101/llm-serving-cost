@@ -10,28 +10,87 @@ cheaper than API? And what exactly is the cost of running a model
 yourself — TTFT, throughput, tail latency? This project builds the
 measurement layer to answer those questions.
 
+## Structure
+
+### Entry points
+
+| Command | Reads | Writes |
+|---|---|---|
+| `python run_bench.py` | `.env` (via `src/config.py`), `data/prompts.jsonl`, Ollama at `OLLAMA_HOST` | `results/bench_<sha8>.json`, `docs/results.md`, console table |
+| `python -m src.report results/bench_<sha8>.json` | a stored results file | `docs/results.md` (no Ollama needed) |
+| `python -m pytest -q` | `tests/` (no Ollama, no network) | nothing outside temp dirs |
+
+### Run flow
+
+```
+python run_bench.py
+└─ run_bench.py:main
+   ├─ src/bench/provenance.py:check_provenance         git commit + clean-tree guard (refuses unless --allow-dirty)
+   ├─ src/bench/benchmark.py:load_prompts              reads data/prompts.jsonl
+   ├─ src/bench/benchmark.py:run_single                one streamed POST to Ollama /api/generate -> BenchmarkRun
+   │                                                    (repeated for every model x prompt x RUNS_PER_CELL)
+   ├─ src/bench/cost.py:build_cost_profile             mean tok/s per model -> CostProfile
+   ├─ src/bench/results_writer.py:build_results_payload
+   │  └─ src/bench/results_writer.py:build_aggregates  median TTFT, median tok/s, p95 total per (model, prompt class)
+   ├─ run_bench.py:print_summary                       console table from the payload's aggregates
+   ├─ src/bench/results_writer.py:write_results_json   -> results/bench_<sha8>.json
+   └─ src/report.py:write_report                       -> docs/results.md (renders the same payload)
+```
+
+### Code map
+
+| File | Responsibility |
+|---|---|
+| `run_bench.py` | Entry point: parse flags, run the benchmark loop, write the results |
+| `src/config.py` | `settings` read from `.env`: Ollama host, models, runs per cell, hardware label |
+| `src/schema.py` | `BenchmarkRun` (one request) and `CostProfile` (cost model for one model) |
+| `src/bench/benchmark.py` | `load_prompts`, `run_single`: stream one request and time it |
+| `src/bench/cost.py` | `build_cost_profile`: capacity, local vs API $/1M tokens, break-even |
+| `src/bench/provenance.py` | `check_provenance`: record the git commit, refuse a dirty tree |
+| `src/bench/results_writer.py` | Aggregates (median / p95), the results payload, `results/bench_<sha8>.json` |
+| `src/report.py` | Render `docs/results.md` from a results payload; `python -m src.report` |
+| `src/__init__.py`, `src/bench/__init__.py` | Empty package markers |
+| `data/prompts.jsonl` | 6 Arabic prompts: 2 short, 2 medium, 2 long |
+| `results/bench_f6042d92.json` | Raw per-request data, aggregates and cost inputs of the published run |
+| `docs/results.md` | Generated report (do not edit by hand) |
+| `docs/DESIGN.md` | Why the metrics and the cost model are built this way |
+| `docs/cto-memo.md` | Decision memo for leadership (Arabic) |
+| `tests/test_benchmark.py` | `run_single` timing and parsing against a fake stream |
+| `tests/test_config.py` | `.env` parsing |
+| `tests/test_cost.py` | Break-even, capacity and per-1M pricing |
+| `tests/test_provenance.py` | Refusal rules, with `subprocess.run` faked |
+| `tests/test_results_writer.py` | Median / p95 aggregation, payload fields, JSON writing |
+| `tests/test_report.py` | Report rendering, including the published run's medians |
+| `tests/__init__.py` | Empty package marker |
+| `requirements.txt` | Runtime dependencies (httpx, rich, python-dotenv) and pytest |
+| `requirements-ci.txt` | Test-only dependencies used by CI |
+| `.github/workflows/tests.yml` | CI: run the test suite on every push and pull request |
+| `.env.example` | Template for `.env` |
+| `.gitattributes`, `.gitignore`, `LICENSE` | Repository housekeeping |
+
+### Read the code in this order
+
+1. `run_bench.py` — the whole run in one function.
+2. `src/bench/benchmark.py:run_single` — what is measured and how.
+3. `src/bench/results_writer.py` — how runs become medians / p95 and the JSON file.
+4. `src/bench/cost.py` — the break-even arithmetic.
+5. `src/report.py` — how the JSON becomes `docs/results.md`.
+6. `src/bench/provenance.py` — why a run refuses to start on a dirty tree.
+
 ## Architecture
 
-```
-run_bench.py
-    │
-    ├─ src/bench/benchmark.py    # stream one generation → BenchmarkRun (TTFT, tok/s, total_ms)
-    ├─ src/bench/cost.py         # build_cost_profile → break-even token volume
-    ├─ src/bench/provenance.py   # git commit / dirty-tree refusal guard
-    ├─ src/bench/results_writer.py # raw per-request JSON → results/bench_<sha8>.json
-    └─ src/report/generate.py    # write docs/results.md
-         │
-         └─▶ Ollama /api/generate (streaming)
-                 └─▶ gemma3:4b · qwen2.5-coder:3b
+- **One source of truth per run.** Everything a run produces is first assembled into
+  one payload dict (per-request rows, aggregates, cost profiles, git commit, hardware).
+  That payload is written as `results/bench_<sha8>.json`; the console table and
+  `docs/results.md` are rendered from it, so all three show the same numbers.
+- **One aggregation.** Per (model, prompt class) cell: median TTFT, median tok/s, p95
+  total latency, over successful runs. Medians, because the first request of each model
+  includes loading it.
+- **Provenance before measurement.** A run records the commit it ran on and refuses to
+  start on an uncommitted tree, so every results file maps to exact code.
+- **Model-free tests.** HTTP, git and the clock are faked; the suite needs no Ollama.
 
-src/schema.py      BenchmarkRun · BenchmarkSummary · CostProfile
-src/config.py      settings from .env
-data/prompts.jsonl short / medium / long Arabic prompts
-docs/results.md    generated report
-docs/cto-memo.md   cost/latency trade-off analysis for leadership
-docs/DESIGN.md     design rationale
-tests/             deterministic, model-free unit tests
-```
+Design rationale: [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## Run
 
@@ -44,7 +103,7 @@ cp .env.example .env          # edit BENCH_MODELS if needed
 ollama pull gemma3:4b
 ollama pull qwen2.5-coder:3b
 
-python run_bench.py           # benchmark → docs/results.md + results/bench_<sha8>.json
+python run_bench.py           # benchmark -> results/bench_<sha8>.json + docs/results.md
 ```
 
 Flags:
@@ -69,20 +128,21 @@ pair, streamed from Ollama's `/api/generate`:
 
 - **TTFT** (Time To First Token) — latency the user feels before anything
   appears.
-- **tokens/sec** — sustained decode throughput after the first token.
-- **P95 total latency** — the tail, not just the average.
+- **tokens/sec** — output tokens / total request time. The total **includes the
+  time to first token** (and model loading on a cold first request), so this is
+  end-to-end throughput for one request, not decode-only throughput.
+- **P95 total latency** — the tail, not just the typical request.
 
 Each cell (model × prompt class) is run `RUNS_PER_CELL` times (from `.env`).
 Streaming is what makes TTFT observable at all — without it only total
-latency is visible. See `docs/DESIGN.md` for the full rationale.
+latency is visible.
 
 ## Results
 
 Measured at commit `f6042d92` on a clean tree — raw file
-[`results/bench_f6042d92.json`](results/bench_f6042d92.json) (every request, the aggregates, and the cost inputs).
-24 streamed requests: 2 models × 6 Arabic prompts × 2 repetitions,
-no warm-up (the first request of each model includes loading it, which is why medians are
-reported). Hardware: Windows 11, 15.9 GB RAM, NVIDIA GTX 1050 Ti 4 GB (Ollama GPU offload).
+[`results/bench_f6042d92.json`](results/bench_f6042d92.json).
+24 streamed requests: 2 models × 6 Arabic prompts × 2 repetitions, no warm-up.
+Hardware: Windows 11, 15.9 GB RAM, NVIDIA GTX 1050 Ti 4 GB (Ollama GPU offload).
 
 | model | prompt class | runs | median TTFT ms | median tok/s | p95 total ms |
 |---|---|---:|---:|---:|---:|
@@ -93,25 +153,14 @@ reported). Hardware: Windows 11, 15.9 GB RAM, NVIDIA GTX 1050 Ti 4 GB (Ollama GP
 | `qwen2.5-coder:3b` | medium | 4/4 | 395 | 8.64 | 34,901 |
 | `qwen2.5-coder:3b` | long | 4/4 | 578 | 8.32 | 36,180 |
 
-**Latency.** Once a model is loaded, the first token arrives in under 1.2 s for every prompt
-class, and decoding runs at about 8–10 tokens/s. The p95 totals (22–36 s) are dominated by
-generating up to 300 tokens at that rate, not by waiting for the first one.
+**Cost.** At the measured mean throughput (9.77 and 8.37 tok/s), running 24/7 produces
+~22–25M tokens/month. The break-even against illustrative hosted pricing ($0.15 / $0.60
+per 1M input / output tokens) and an assumed ~$50/month server is ~119M tokens/month —
+**not reachable on this hardware**; a local token costs about 4.7–5.5× the hosted price
+($1.97 / $2.31 vs $0.42 per 1M) under these assumptions. Local serving on this class of machine is justified by data residency
+or offline operation, not by cost.
 
-**Cost.** A fixed ~$50/month server is compared with illustrative hosted pricing of $0.15 /
-$0.60 per 1M input / output tokens. Both prices are inputs, not measurements; the throughput is
-measured.
-
-| model | mean tok/s | capacity, tok/month (24/7) | local $/1M tok | API $/1M tok | break-even tok/month | reachable |
-|---|---:|---:|---:|---:|---:|:---:|
-| `gemma3:4b` | 9.77 | 25,321,680 | $1.97 | $0.42 | 119,047,619 | no |
-| `qwen2.5-coder:3b` | 8.37 | 21,686,400 | $2.31 | $0.42 | 119,047,619 | no |
-
-The break-even (~119M tokens/month) is **beyond what this hardware can produce** even running
-24/7 (~22–25M). At the measured throughput a local token costs about 4.7× the hosted price
-under these assumptions. Local serving on this class of machine is justified by data residency
-or offline operation, not by cost — and a cost case would need a benchmark on the actual target
-server, where throughput, and so capacity, would be different.
-
+Full report — cost table and every request: [`docs/results.md`](docs/results.md).
 
 ## Limitations
 
@@ -144,22 +193,23 @@ server, where throughput, and so capacity, would be different.
 
 ## Reproduction
 
+Rebuild `docs/results.md` from the published raw data (no Ollama needed):
+
 ```bash
-git clone <this-repo>
-cd llm-serving-cost
-python -m venv .venv && source .venv/bin/activate   # or .\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-cp .env.example .env
-ollama pull gemma3:4b
-ollama pull qwen2.5-coder:3b
+python -m src.report results/bench_f6042d92.json   # standard library only
+```
+
+Re-measure on your own machine (needs Ollama and the two models, see [Run](#run)):
+
+```bash
 python run_bench.py
 ```
 
-This regenerates `docs/results.md` and writes a new
-`results/bench_<sha8>.json` containing every per-request measurement,
-aggregates, the model, Ollama host, hardware string, timestamp, and the
-git commit the run was produced from. Run the test suite (no Ollama or
-network required) with:
+This writes a new `results/bench_<sha8>.json` keyed by the current commit — every
+per-request measurement, the aggregates, the models, Ollama host, hardware string,
+timestamp and git commit — and regenerates `docs/results.md` from it.
+
+Run the test suite (no Ollama or network required):
 
 ```bash
 python -m pip install -r requirements-ci.txt
@@ -170,29 +220,7 @@ python -m pytest -q
 
 | Layer | Choice | Why |
 |-------|--------|-----|
-| HTTP | `httpx` streaming | Only way to measure TTFT accurately |
-| LLM | Ollama `/api/generate` | OpenAI-compatible, supports streaming |
+| HTTP | `httpx` streaming | Streaming is what exposes the first-token moment |
+| LLM | Ollama `/api/generate` | Native streaming endpoint; reports `eval_count` per request |
 | Reporting | Markdown tables | Renderable on GitHub without deps |
 | Cost model | Break-even formula | Simple, self-contained, easy to adjust |
-
-## Layout
-
-```
-data/prompts.jsonl          6 Arabic prompts (short / medium / long)
-src/
-  schema.py                 BenchmarkRun, BenchmarkSummary, CostProfile
-  config.py                 settings from env
-  bench/
-    benchmark.py            streaming benchmark runner
-    cost.py                 cost model + break-even
-    provenance.py           git commit / dirty-tree refusal guard
-    results_writer.py       raw JSON provenance file writer
-  report/
-    generate.py             Markdown report writer
-tests/                      deterministic, model-free unit tests
-run_bench.py                entry point
-docs/
-  results.md                generated benchmark table
-  cto-memo.md               cost/perf analysis memo
-  DESIGN.md                 design decisions
-```
